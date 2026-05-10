@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>⚡ SYSTÈME GÉRANT CENTRAL PRO</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="gerant.css">
+</head>
+<body>
+
+<!-- ─── ÉCRAN DE CONNEXION ──────────────────────────────────────────────── -->
+<div id="login-screen" style="
+    position:fixed; inset:0; background:#050510;
+    display:flex; align-items:center; justify-content:center; z-index:9999;">
+    <div style="background:rgba(10,10,20,0.98); border:2px solid #00ffcc;
+                border-radius:16px; padding:40px; width:340px; text-align:center;
+                box-shadow:0 0 40px rgba(0,255,204,0.3);">
+        <h2 style="color:#00ffcc; margin-bottom:8px; letter-spacing:2px;">👁️ ACCÈS GÉRANT</h2>
+        <p style="color:#888; font-size:0.9rem; margin-bottom:24px;">Espace sécurisé — authentification requise</p>
+        <input id="login-pwd" type="password" placeholder="Mot de passe gérant..."
+               style="width:100%; padding:12px; box-sizing:border-box; background:#111;
+                      color:#fff; border:1px solid #00ffcc; border-radius:6px;
+                      outline:none; font-size:1rem; margin-bottom:12px;"
+               onkeyup="if(event.key==='Enter') doLogin()">
+        <div id="login-err" style="color:#ff0044; font-size:0.85rem; min-height:20px; margin-bottom:8px;"></div>
+        <button onclick="doLogin()" style="width:100%; padding:13px; background:#00ffcc;
+                color:#000; font-weight:bold; font-size:1rem; border:none;
+                border-radius:6px; cursor:pointer; text-transform:uppercase;
+                letter-spacing:1px;">CONNEXION</button>
+    </div>
+</div>
+
+<script>
+function doLogin() {
+    var pwd = document.getElementById('login-pwd').value;
+    fetch('/api/gerant/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            window.__GERANT_TOKEN__ = pwd;
+            document.getElementById('login-screen').style.display = 'none';
+        } else {
+            document.getElementById('login-err').textContent = '❌ Mot de passe incorrect';
+            document.getElementById('login-pwd').value = '';
+            document.getElementById('login-pwd').focus();
+        }
+    })
+    .catch(() => { document.getElementById('login-err').textContent = '⚠️ Erreur de connexion'; });
+}
+document.getElementById('login-pwd').focus();
+</script>
+<!-- ───────────────────────────────────────────────────────────────────────── -->
+
+<div id="gerant-app">
+    <div class="header">
+        <h1 class="title">👁️ O.S GÉRANT SUPRÊME</h1>
+        <div class="header-right">
+            <p class="live-text">[ DONNÉES EN DIRECT ]</p>
+            <div class="status-dot active"></div>
+        </div>
+    </div>
+
+    <div class="compta-box">
+        <h2 class="compta-title">CAISSE CENTRALE ABONNEMENTS</h2>
+        <h1 class="compta-value">{{ totalCompta.toLocaleString() }} AR</h1>
+        <p class="compta-sub">Total: {{ subscriptions.length }} transaction(s)</p>
+    </div>
+
+    <div class="dashboard">
+        <div class="panel">
+            <h3>📈 GRAPHIQUES GLOBAUX (ROOT)</h3>
+            <div class="global-chart">
+                <canvas id="globalSalesChart"></canvas>
+            </div>
+            
+            <div class="revenue-chart">
+                <canvas id="revenueChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h3>🧠 PRÉDICTION IA & LIVE MONITORING</h3>
+            <h1 class="ia-title">+{{ predictedSales }} Ventes</h1>
+            <p>Estimées pour demain</p>
+            <hr class="ia-hr">
+            <p>👥 Utilisateurs actifs: <b>{{liveStats.activeUsers}}</b></p>
+            <p>🛵 Livraisons en cours: <b>{{liveStats.activeDeliveries}}</b></p>
+            <p>💬 Messages échangés: <b>{{liveStats.messages}}</b></p>
+        </div>
+
+        <div class="panel">
+            <h3>🚨 ALERTES FRAUDE</h3>
+            <div v-if="fraudAlerts.length === 0" style="color:gray;">Aucune activité suspecte.</div>
+            <div v-for="a in fraudAlerts" class="fraud-alert">{{a}}</div>
+        </div>
+
+        <div class="panel panel-container">
+            <h3 style="color:#ff0044;">⚠️ ACTIONS DANGEREUSES (ROOT)</h3>
+            <button class="btn-g btn-reset" @click="resetAll">🔥 RESET TOTAL SYSTÈME</button>
+            <button class="btn-g btn-delete" @click="deleteAllUsers">🧨 PURGER TOUS LES UTILISATEURS</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3 class="panel-title">💬 CENTRE DE COMMUNICATION GLOBAL (Toutes les conversations)</h3>
+        <div class="chat-box">
+            <div v-for="m in chat" class="chat-line">
+                <span class="chat-date">[{{m.date}}]</span> 
+                <b class="chat-user" :class="m.sender === 'GÉRANT' ? 'gerant': (m.role === 'admin' ? 'admin' : 'client')">
+                    {{m.sender}}</b> 
+                <span class="chat-dest">=> {{m.dest}} :</span> 
+                <span class="chat-text">{{m.text}}</span>
+            </div>
+        </div>
+        <div class="chat-input">
+            <input v-model="newMsg" class="input input-annonce" placeholder="Écrire une ANNONCE GLOBALE..." @keyup.enter="sendGerantChat">
+            <button class="btn-g" style="flex: 1;" @click="sendGerantChat">ENVOYER</button>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="panel">
+            <h2>🏢 PATRONS</h2>
+            <div class="table-container">
+                <table>
+                    <tr>
+                        <th>Statut</th>
+                        <th>ID</th>
+                        <th>Shop</th>
+                        <th>Niveau</th>
+                        <th>Actions</th>
+                    </tr>
+                    <tr v-for="user in patrons">
+                        <td><span class="status-dot" :class="user.isActive ? 'active' : 'inactive'"></span></td>
+                        <td class="mono">{{ user.user }}</td>
+                        <td>{{ user.shop }}</td>
+                        <td>
+                            <span v-if="user.isPremium" class="badge-premium">PRO</span>
+                            <span v-else class="badge-free">STD</span>
+                        </td>
+                        <td>
+                            <button v-if="user.isPremium" class="btn-action btn-revoke" @click="gerantAction('revoke', user.user)">RÉVOQUER</button>
+                            <button class="btn-action btn-ban" @click="gerantAction('ban', user.user)">BANNIR</button>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>🛒 CLIENTS</h2>
+            <div class="table-container">
+                <table>
+                    <tr>
+                        <th>Statut</th>
+                        <th>ID</th>
+                        <th>Niveau</th>
+                        <th>Actions</th>
+                    </tr>
+                    <tr v-for="user in clients">
+                        <td><span class="status-dot" :class="user.isActive ? 'active' : 'inactive'"></span></td>
+                        <td class="mono">{{ user.user }}</td>
+                        <td>
+                            <span v-if="user.isPremium" class="badge-premium">PRO</span>
+                            <span v-else class="badge-free">STD</span>
+                        </td>
+                        <td>
+                            <button v-if="user.isPremium" class="btn-action btn-revoke" @click="gerantAction('revoke', user.user)">RÉVOQUER</button>
+                            <button class="btn-action btn-ban" @click="gerantAction('ban', user.user)">BANNIR</button>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="gerant.js"></script>
+
+</body>
+</html>
